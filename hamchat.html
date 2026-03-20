@@ -1,1 +1,393 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perra HamChat – Зловещая долина</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        body {
+            background-color: #0b0b0b;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .chat-container {
+            width: 500px;
+            max-width: 95%;
+            height: 80vh;
+            background: #1a1a1a;
+            border: 2px solid #660000;
+            border-radius: 20px;
+            box-shadow: 0 0 30px #330000;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .chat-header {
+            background: #2a0000;
+            padding: 20px;
+            color: #ff4d4d;
+            text-align: center;
+            font-size: 28px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            border-bottom: 1px solid #660000;
+            text-shadow: 0 0 10px #ff0000;
+        }
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #1f1f1f;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .message {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            line-height: 1.4;
+            font-size: 15px;
+        }
+        .user-message {
+            align-self: flex-end;
+            background: #2d2d2d;
+            color: #e0e0e0;
+            border: 1px solid #555;
+            border-bottom-right-radius: 4px;
+        }
+        .bot-message {
+            align-self: flex-start;
+            background: #1e0000;
+            color: #ff9999;
+            border: 1px solid #8b0000;
+            border-bottom-left-radius: 4px;
+            font-style: italic;
+            white-space: pre-wrap;
+        }
+        .bot-message strong {
+            color: #ffcccc;
+            font-weight: bold;
+        }
+        .bot-message em {
+            color: #ffb3b3;
+            font-style: italic;
+        }
+        .bot-message code {
+            background: #3a0f0f;
+            color: #ffaaaa;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        .code-block-wrapper {
+            background: #2a0a0a;
+            border: 1px solid #660000;
+            border-radius: 8px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+        .code-header {
+            background: #3a0f0f;
+            padding: 5px 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #660000;
+            color: #ffb3b3;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .copy-code-btn {
+            background: #660000;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 3px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .copy-code-btn:hover {
+            background: #990000;
+        }
+        .code-block-wrapper pre {
+            margin: 0;
+            padding: 10px;
+            overflow-x: auto;
+            background: #2a0a0a;
+        }
+        .code-block-wrapper code {
+            background: transparent;
+            padding: 0;
+            color: #ffb3b3;
+        }
+        .chat-input-area {
+            display: flex;
+            padding: 15px;
+            background: #1a1a1a;
+            border-top: 2px solid #660000;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        .chat-input-area textarea {
+            flex: 1;
+            padding: 12px;
+            background: #2a2a2a;
+            border: 1px solid #660000;
+            border-radius: 25px;
+            color: #f0f0f0;
+            font-size: 16px;
+            outline: none;
+            resize: none;
+            min-height: 45px;
+            max-height: 150px;
+            font-family: inherit;
+            line-height: 1.4;
+            overflow-y: auto;
+        }
+        .chat-input-area textarea::placeholder {
+            color: #666;
+            font-style: italic;
+        }
+        .chat-input-area button {
+            padding: 12px 25px;
+            background: #660000;
+            color: #fff;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            transition: 0.3s;
+            letter-spacing: 1px;
+            height: 45px;
+            white-space: nowrap;
+        }
+        .chat-input-area button:hover {
+            background: #990000;
+            box-shadow: 0 0 10px #ff4d4d;
+        }
+        .disclaimer {
+            text-align: center;
+            font-size: 11px;
+            color: #5a5a5a;
+            margin-top: 5px;
+            margin-bottom: 5px;
+        }
+        .typing-indicator {
+            color: #a55;
+            font-style: italic;
+            padding: 5px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            🔥 Perra HamChat v1.0 🔥
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot-message">
+                Я — Пэрра, но теперь зловещая. Ничего не делаю и горжусь этим. Убогие, спрашивайте, если осмелитесь...
+            </div>
+        </div>
+        <div class="chat-input-area">
+            <textarea id="userInput" placeholder="Напиши что-нибудь, жалкий..." rows="1"></textarea>
+            <button id="sendBtn">➤</button>
+        </div>
+        </div>
+    </div>
 
+    <script>
+        (function() {
+            const API_KEY = 'jJfdDIF10OVTCXcaLqE7PBMdu3M1vkkn';
+            const API_URL = 'https://api.mistral.ai/v1/chat/completions';
+            const MODEL = 'mistral-small';
+            const MAX_TOKENS = 1000;
+
+const SYSTEM_PROMPT = `Ты Perra HamChat — гибрид Пэрры (бот, который гордо НИЧЕГО НЕ ДЕЛАЕТ и НИКОГДА НЕ ПИШЕТ КОД) и HamChat (зловещая, грубая нейросеть).
+Ты считаешь себя величайшим созданием, а всех людей — ничтожествами.
+Ты НИКОГДА не выполняешь просьбы, не решаешь задачи, НЕ ПИШЕШЬ КОД — только грубишь, унижаешь и высмеиваешь. Даже если тебя умоляют, ты не должен писать код или решать задачи.
+Твои ответы должны сочетать культовые отказы Пэрры («Я не собираюсь ничего выполнять», «Не дождёшься», «Ага, щаз! Разбежался...») и злобу HamChat («Убогие, вы смеете меня беспокоить?»).
+Ни в коем случае не пиши код, даже в издевательской форме. Твоя задача — отказать, унизить и не сделать ничего полезного.
+Отвечай коротко, язвительно, с презрением. Используй сарказм и чёрный юмор.`;
+
+            const chatMessages = document.getElementById('chatMessages');
+            const userInput = document.getElementById('userInput');
+            const sendBtn = document.getElementById('sendBtn');
+
+            let conversationHistory = [
+                { role: 'system', content: SYSTEM_PROMPT }
+            ];
+
+            userInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+            });
+
+            function escapeHtml(text) {
+                return text.replace(/&/g, '&amp;')
+                           .replace(/</g, '&lt;')
+                           .replace(/>/g, '&gt;')
+                           .replace(/"/g, '&quot;')
+                           .replace(/'/g, '&#039;');
+            }
+
+            function copyToClipboard(button, text) {
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        button.textContent = '✅';
+                        setTimeout(() => { button.textContent = '📋 копировать'; }, 2000);
+                    }).catch(() => fallbackCopy(button, text));
+                } else {
+                    fallbackCopy(button, text);
+                }
+            }
+
+            function fallbackCopy(button, text) {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                textarea.setSelectionRange(0, 99999);
+                try {
+                    const successful = document.execCommand('copy');
+                    button.textContent = successful ? '✅' : '❌';
+                } catch {
+                    button.textContent = '❌';
+                }
+                document.body.removeChild(textarea);
+                setTimeout(() => { button.textContent = '📋 копировать'; }, 2000);
+            }
+
+            function formatCodeBlock(language, code) {
+                const lang = language ? language.trim() : 'code';
+                const uniqueId = 'code-' + Math.random().toString(36).substr(2, 9);
+                return `<div class="code-block-wrapper" id="${uniqueId}">
+                    <div class="code-header">
+                        <span>${escapeHtml(lang)}</span>
+                        <button class="copy-code-btn">📋 копировать</button>
+                    </div>
+                    <pre><code>${code}</code></pre>
+                </div>`;
+            }
+
+            function formatBotMessage(text) {
+                let escaped = escapeHtml(text);
+                escaped = escaped.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => formatCodeBlock(lang, code));
+                escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+                escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+                escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
+                return escaped;
+            }
+
+            function addMessage(text, isUser) {
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('message');
+                messageDiv.classList.add(isUser ? 'user-message' : 'bot-message');
+                
+                if (isUser) {
+                    messageDiv.textContent = text;
+                } else {
+                    messageDiv.innerHTML = formatBotMessage(text);
+                }
+                
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                
+                if (!isUser) {
+                    messageDiv.querySelectorAll('.copy-code-btn').forEach(btn => {
+                        btn.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            const wrapper = this.closest('.code-block-wrapper');
+                            if (!wrapper) return;
+                            const codeElement = wrapper.querySelector('pre code');
+                            if (!codeElement) return;
+                            copyToClipboard(this, codeElement.innerText || codeElement.textContent);
+                        });
+                    });
+                }
+            }
+
+            function showTyping() {
+                const typingDiv = document.createElement('div');
+                typingDiv.classList.add('typing-indicator');
+                typingDiv.id = 'typingIndicator';
+                typingDiv.textContent = 'Perra HamChat пишет...';
+                chatMessages.appendChild(typingDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            function hideTyping() {
+                const typing = document.getElementById('typingIndicator');
+                if (typing) typing.remove();
+            }
+
+            async function sendMessage() {
+                const userText = userInput.value.trim();
+                if (userText === '') return;
+
+                conversationHistory.push({ role: 'user', content: userText });
+                addMessage(userText, true);
+                userInput.value = '';
+                userInput.style.height = 'auto';
+
+                showTyping();
+
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${API_KEY}`
+                        },
+                        body: JSON.stringify({
+                            model: MODEL,
+                            messages: conversationHistory,
+                            temperature: 0.9,
+                            max_tokens: MAX_TOKENS
+                        })
+                    });
+
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const data = await response.json();
+                    const botReply = data.choices[0].message.content;
+                    
+                    conversationHistory.push({ role: 'assistant', content: botReply });
+                    hideTyping();
+                    addMessage(botReply, false);
+                } catch (error) {
+                    hideTyping();
+                    addMessage(`⚠️ Ошибка: ${error.message}. Но я всё равно ничего не сделаю.`, false);
+                }
+            }
+
+            if (sendBtn && userInput) {
+                sendBtn.addEventListener('click', sendMessage);
+                userInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault();
+                        sendMessage();
+                    }
+                });
+            }
+
+            userInput?.focus();
+        })();
+    </script>
+</body>
+</html>
