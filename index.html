@@ -7,6 +7,7 @@
     <link rel="icon" type="image/png" href="hamchat.png">
     <link rel="apple-touch-icon" href="hamchat.png">
     <style>
+        /* (все стили такие же, как в предыдущей версии) */
         * {
             margin: 0;
             padding: 0;
@@ -231,14 +232,14 @@
             border: 2px solid #660000;
             border-radius: 20px;
             padding: 30px;
-            width: 300px;
+            width: 320px;
             text-align: center;
             color: #ff9999;
         }
         .modal-content input {
             width: 100%;
             padding: 10px;
-            margin: 15px 0;
+            margin: 10px 0;
             background: #2a2a2a;
             border: 1px solid #660000;
             border-radius: 25px;
@@ -256,6 +257,11 @@
         .modal-content button:hover {
             background: #990000;
         }
+        .error-msg {
+            color: #ff6666;
+            font-size: 12px;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -269,7 +275,7 @@
             </div>
         </div>
         <div class="chat-messages" id="chatMessages">
-            <!-- Сообщения будут загружены после входа -->
+            <!-- Сообщения появятся после входа -->
         </div>
         <div class="chat-input-area" id="chatInputArea">
             <textarea id="userInput" placeholder="Войдите, чтобы начать общение..." rows="1" disabled></textarea>
@@ -304,8 +310,13 @@
             // ---------- Данные пользователя и чатов ----------
             let currentUser = null;
             let conversationHistory = [];
-            let usersData = {};
+            let usersData = {};      // { username: { passwordHash: "...", messages: [...] } }
             let isTyping = false;
+
+            // Простая функция хеширования пароля (Base64 – не безопасно, но для демо)
+            function hashPassword(password) {
+                return btoa(password);
+            }
 
             // Загружаем всех пользователей из localStorage
             function loadUsersFromStorage() {
@@ -324,7 +335,7 @@
             function saveCurrentChat() {
                 if (!currentUser) return;
                 if (!usersData[currentUser]) {
-                    usersData[currentUser] = { messages: [] };
+                    usersData[currentUser] = { passwordHash: '', messages: [] };
                 }
                 const historyToSave = conversationHistory.filter(msg => msg.role !== 'system');
                 usersData[currentUser].messages = historyToSave;
@@ -382,7 +393,7 @@
                 }
             }
 
-            // ---------- Вспомогательные функции ----------
+            // ---------- Вспомогательные функции (форматирование, копирование) ----------
             function escapeHtml(text) {
                 return text.replace(/&/g, '&amp;')
                            .replace(/</g, '&lt;')
@@ -499,7 +510,7 @@
                 }
             }
 
-            // ---------- Управление аккаунтами ----------
+            // ---------- Управление аккаунтами (с паролями) ----------
             function showLoginModal() {
                 const modal = document.createElement('div');
                 modal.className = 'modal';
@@ -507,48 +518,86 @@
                     <div class="modal-content">
                         <h3>Вход / Регистрация</h3>
                         <input type="text" id="loginUsername" placeholder="Имя пользователя" autofocus>
-                        <button id="loginConfirm">Войти / Создать</button>
+                        <input type="password" id="loginPassword" placeholder="Пароль">
+                        <div id="loginError" class="error-msg"></div>
+                        <button id="loginConfirm">Войти</button>
                         <button id="loginCancel">Отмена</button>
+                        <button id="registerBtn">Зарегистрироваться</button>
                     </div>
                 `;
                 document.body.appendChild(modal);
 
+                const usernameInput = modal.querySelector('#loginUsername');
+                const passwordInput = modal.querySelector('#loginPassword');
+                const errorDiv = modal.querySelector('#loginError');
                 const confirmBtn = modal.querySelector('#loginConfirm');
                 const cancelBtn = modal.querySelector('#loginCancel');
-                const usernameInput = modal.querySelector('#loginUsername');
+                const registerBtn = modal.querySelector('#registerBtn');
 
-                const handleConfirm = () => {
+                // Вход существующего пользователя
+                const handleLogin = () => {
                     const username = usernameInput.value.trim();
-                    if (username === '') return;
-                    // Переключаемся на выбранного пользователя
-                    currentUser = username;
-                    if (!usersData[username]) {
-                        usersData[username] = { messages: [] };
-                        saveUsersToStorage();
+                    const password = passwordInput.value;
+                    if (!username || !password) {
+                        errorDiv.textContent = 'Введите имя и пароль';
+                        return;
                     }
-                    loadUserChat(username);
-                    updateUI(true); // авторизован
-                    modal.remove();
+                    const user = usersData[username];
+                    if (user && user.passwordHash === hashPassword(password)) {
+                        // Успешный вход
+                        currentUser = username;
+                        loadUserChat(username);
+                        updateUI(true);
+                        modal.remove();
+                        localStorage.setItem('hamchat_current_user', username);
+                    } else {
+                        errorDiv.textContent = 'Неверное имя пользователя или пароль';
+                    }
                 };
 
-                confirmBtn.addEventListener('click', handleConfirm);
+                // Регистрация нового пользователя
+                const handleRegister = () => {
+                    const username = usernameInput.value.trim();
+                    const password = passwordInput.value;
+                    if (!username || !password) {
+                        errorDiv.textContent = 'Введите имя и пароль';
+                        return;
+                    }
+                    if (usersData[username]) {
+                        errorDiv.textContent = 'Пользователь уже существует';
+                        return;
+                    }
+                    // Создаём нового пользователя
+                    usersData[username] = {
+                        passwordHash: hashPassword(password),
+                        messages: []
+                    };
+                    saveUsersToStorage();
+                    // Автоматически входим
+                    currentUser = username;
+                    loadUserChat(username);
+                    updateUI(true);
+                    modal.remove();
+                    localStorage.setItem('hamchat_current_user', username);
+                };
+
+                confirmBtn.addEventListener('click', handleLogin);
+                registerBtn.addEventListener('click', handleRegister);
                 cancelBtn.addEventListener('click', () => modal.remove());
-                usernameInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') handleConfirm();
-                });
+
+                usernameInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
+                passwordInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
                 usernameInput.focus();
             }
 
             function logout() {
                 currentUser = null;
+                localStorage.removeItem('hamchat_current_user');
                 conversationHistory = [{ role: 'system', content: SYSTEM_PROMPT }];
                 chatMessages.innerHTML = '';
-                // Не показываем приветствие, пока нет пользователя
                 updateUI(false);
-                saveCurrentChat(); // сохраняем пустой чат? не нужно
-                // Сброс поля ввода
-                userInput.value = '';
-                userInput.placeholder = 'Войдите, чтобы начать общение...';
+                // Показываем окно входа
+                showLoginModal();
             }
 
             function updateUI(isLoggedIn) {
@@ -574,34 +623,24 @@
             // ---------- Инициализация ----------
             function init() {
                 loadUsersFromStorage();
-                // Проверяем, есть ли сохранённый пользователь
                 const savedUser = localStorage.getItem('hamchat_current_user');
                 if (savedUser && usersData[savedUser]) {
+                    // Проверка пароля не нужна, так как пользователь уже вошёл ранее (пароль хранится в сессии)
+                    // Но можно запросить пароль заново для безопасности. Оставим как есть.
                     currentUser = savedUser;
                     loadUserChat(currentUser);
                     updateUI(true);
                 } else {
                     updateUI(false);
-                    // Показываем модальное окно входа сразу
                     showLoginModal();
                 }
 
-                // Сохраняем текущего пользователя при закрытии
                 window.addEventListener('beforeunload', () => {
-                    if (currentUser) {
-                        localStorage.setItem('hamchat_current_user', currentUser);
-                    } else {
-                        localStorage.removeItem('hamchat_current_user');
-                    }
                     saveCurrentChat();
                 });
 
                 accountBtn.addEventListener('click', showLoginModal);
-                logoutBtn.addEventListener('click', () => {
-                    logout();
-                    // После выхода показываем модалку входа
-                    showLoginModal();
-                });
+                logoutBtn.addEventListener('click', logout);
                 sendBtn.addEventListener('click', sendMessage);
                 userInput.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
