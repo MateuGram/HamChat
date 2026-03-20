@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Perra HamChat – Зловещий ИИ</title>
-    <!-- Favicon -->
     <link rel="icon" type="image/png" href="hamchat.png">
     <link rel="apple-touch-icon" href="hamchat.png">
     <style>
@@ -204,20 +203,24 @@
             background: #990000;
             box-shadow: 0 0 10px #ff4d4d;
         }
+        .chat-input-area.disabled textarea,
+        .chat-input-area.disabled button {
+            opacity: 0.6;
+            pointer-events: none;
+        }
         .typing-indicator {
             color: #a55;
             font-style: italic;
             padding: 5px;
             font-size: 14px;
         }
-        /* Модальное окно входа/регистрации */
         .modal {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.9);
             display: flex;
             justify-content: center;
             align-items: center;
@@ -259,20 +262,18 @@
     <div class="chat-container">
         <div class="chat-header">
             🔥 Perra HamChat v1.0 🔥
-            <div class="account-panel" id="accountPanel">
-                <span class="user-status" id="userStatus">Гость</span>
+            <div class="account-panel">
+                <span class="user-status" id="userStatus">Не авторизован</span>
                 <button class="account-btn" id="accountBtn">Войти</button>
                 <button class="logout-btn" id="logoutBtn" style="display: none;">Выйти</button>
             </div>
         </div>
         <div class="chat-messages" id="chatMessages">
-            <div class="message bot-message">
-                Я — Пэрра, но теперь зловещая. Ничего не делаю и горжусь этим. Убогие, спрашивайте, если осмелитесь...
-            </div>
+            <!-- Сообщения будут загружены после входа -->
         </div>
-        <div class="chat-input-area">
-            <textarea id="userInput" placeholder="Напиши что-нибудь, жалкий..." rows="1"></textarea>
-            <button id="sendBtn">➤</button>
+        <div class="chat-input-area" id="chatInputArea">
+            <textarea id="userInput" placeholder="Войдите, чтобы начать общение..." rows="1" disabled></textarea>
+            <button id="sendBtn" disabled>➤</button>
         </div>
     </div>
 
@@ -298,11 +299,13 @@
             const accountBtn = document.getElementById('accountBtn');
             const logoutBtn = document.getElementById('logoutBtn');
             const userStatusSpan = document.getElementById('userStatus');
+            const chatInputArea = document.getElementById('chatInputArea');
 
             // ---------- Данные пользователя и чатов ----------
-            let currentUser = null;            // имя текущего пользователя
-            let conversationHistory = [];       // история сообщений для текущего пользователя
-            let usersData = {};                 // { username: { chats: [] } } (можно расширить для нескольких чатов, пока один)
+            let currentUser = null;
+            let conversationHistory = [];
+            let usersData = {};
+            let isTyping = false;
 
             // Загружаем всех пользователей из localStorage
             function loadUsersFromStorage() {
@@ -318,19 +321,16 @@
                 localStorage.setItem('hamchat_users', JSON.stringify(usersData));
             }
 
-            // Сохранить чат текущего пользователя
             function saveCurrentChat() {
                 if (!currentUser) return;
                 if (!usersData[currentUser]) {
                     usersData[currentUser] = { messages: [] };
                 }
-                // Сохраняем историю (убираем системный промт из сохранения, он будет добавляться при загрузке)
                 const historyToSave = conversationHistory.filter(msg => msg.role !== 'system');
                 usersData[currentUser].messages = historyToSave;
                 saveUsersToStorage();
             }
 
-            // Загрузить чат пользователя
             function loadUserChat(username) {
                 if (!usersData[username] || !usersData[username].messages) {
                     conversationHistory = [{ role: 'system', content: SYSTEM_PROMPT }];
@@ -340,15 +340,14 @@
                         ...usersData[username].messages
                     ];
                 }
-                // Очищаем окно чата и перерисовываем
+                // Очищаем окно чата
                 chatMessages.innerHTML = '';
-                // Добавляем приветственное сообщение бота, если история пуста
                 if (conversationHistory.length === 1) {
+                    // Если история пуста, добавляем приветствие
                     const welcomeMsg = "Я — Пэрра, но теперь зловещая. Ничего не делаю и горжусь этим. Убогие, спрашивайте, если осмелитесь...";
                     conversationHistory.push({ role: 'assistant', content: welcomeMsg });
                     addMessage(welcomeMsg, false);
                 } else {
-                    // Отображаем все сообщения из истории
                     conversationHistory.forEach(msg => {
                         if (msg.role === 'user') addMessage(msg.content, true);
                         if (msg.role === 'assistant') addMessage(msg.content, false);
@@ -357,7 +356,6 @@
                 saveCurrentChat();
             }
 
-            // Функция добавления сообщения в DOM и сохранения (без вызова API)
             function addMessage(text, isUser) {
                 const messageDiv = document.createElement('div');
                 messageDiv.classList.add('message');
@@ -369,7 +367,7 @@
                 }
                 chatMessages.appendChild(messageDiv);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
-                // Добавляем обработчики копирования для новых блоков кода
+
                 if (!isUser) {
                     messageDiv.querySelectorAll('.copy-code-btn').forEach(btn => {
                         btn.addEventListener('click', function(e) {
@@ -384,7 +382,7 @@
                 }
             }
 
-            // ---------- Вспомогательные функции (форматирование, копирование) ----------
+            // ---------- Вспомогательные функции ----------
             function escapeHtml(text) {
                 return text.replace(/&/g, '&amp;')
                            .replace(/</g, '&lt;')
@@ -443,22 +441,22 @@
                 setTimeout(() => { button.textContent = '📋 копировать'; }, 2000);
             }
 
-            // ---------- Отправка сообщения к API ----------
-            let isTyping = false;
-
+            // ---------- Отправка сообщения ----------
             async function sendMessage() {
+                if (!currentUser) {
+                    showLoginModal();
+                    return;
+                }
                 if (isTyping) return;
                 const userText = userInput.value.trim();
                 if (userText === '') return;
 
-                // Добавляем сообщение пользователя в историю и DOM
                 conversationHistory.push({ role: 'user', content: userText });
                 addMessage(userText, true);
                 userInput.value = '';
                 userInput.style.height = 'auto';
                 saveCurrentChat();
 
-                // Показываем индикатор печати
                 const typingDiv = document.createElement('div');
                 typingDiv.classList.add('typing-indicator');
                 typingDiv.id = 'typingIndicator';
@@ -489,7 +487,6 @@
                     conversationHistory.push({ role: 'assistant', content: botReply });
                     saveCurrentChat();
 
-                    // Убираем индикатор и добавляем ответ
                     const indicator = document.getElementById('typingIndicator');
                     if (indicator) indicator.remove();
                     addMessage(botReply, false);
@@ -504,13 +501,12 @@
 
             // ---------- Управление аккаунтами ----------
             function showLoginModal() {
-                // Создаём модальное окно
                 const modal = document.createElement('div');
                 modal.className = 'modal';
                 modal.innerHTML = `
                     <div class="modal-content">
                         <h3>Вход / Регистрация</h3>
-                        <input type="text" id="loginUsername" placeholder="Имя пользователя">
+                        <input type="text" id="loginUsername" placeholder="Имя пользователя" autofocus>
                         <button id="loginConfirm">Войти / Создать</button>
                         <button id="loginCancel">Отмена</button>
                     </div>
@@ -531,7 +527,7 @@
                         saveUsersToStorage();
                     }
                     loadUserChat(username);
-                    updateUI();
+                    updateUI(true); // авторизован
                     modal.remove();
                 };
 
@@ -545,43 +541,52 @@
 
             function logout() {
                 currentUser = null;
-                // Сбрасываем историю до системного промта
                 conversationHistory = [{ role: 'system', content: SYSTEM_PROMPT }];
                 chatMessages.innerHTML = '';
-                addMessage("Я — Пэрра, но теперь зловещая. Ничего не делаю и горжусь этим. Убогие, спрашивайте, если осмелитесь...", false);
-                updateUI();
-                saveCurrentChat(); // сохраняем пустой чат для гостя? Не нужно, но можно.
+                // Не показываем приветствие, пока нет пользователя
+                updateUI(false);
+                saveCurrentChat(); // сохраняем пустой чат? не нужно
+                // Сброс поля ввода
+                userInput.value = '';
+                userInput.placeholder = 'Войдите, чтобы начать общение...';
             }
 
-            function updateUI() {
-                if (currentUser) {
+            function updateUI(isLoggedIn) {
+                if (isLoggedIn) {
                     userStatusSpan.textContent = currentUser;
                     accountBtn.style.display = 'none';
                     logoutBtn.style.display = 'inline-block';
+                    userInput.disabled = false;
+                    sendBtn.disabled = false;
+                    userInput.placeholder = 'Напиши что-нибудь, жалкий...';
+                    chatInputArea.classList.remove('disabled');
                 } else {
-                    userStatusSpan.textContent = 'Гость';
+                    userStatusSpan.textContent = 'Не авторизован';
                     accountBtn.style.display = 'inline-block';
                     logoutBtn.style.display = 'none';
+                    userInput.disabled = true;
+                    sendBtn.disabled = true;
+                    userInput.placeholder = 'Войдите, чтобы начать общение...';
+                    chatInputArea.classList.add('disabled');
                 }
             }
 
             // ---------- Инициализация ----------
             function init() {
                 loadUsersFromStorage();
-                // Проверяем, есть ли сохранённый пользователь в localStorage (для автоматического входа)
+                // Проверяем, есть ли сохранённый пользователь
                 const savedUser = localStorage.getItem('hamchat_current_user');
                 if (savedUser && usersData[savedUser]) {
                     currentUser = savedUser;
                     loadUserChat(currentUser);
+                    updateUI(true);
                 } else {
-                    // Гость: очищаем историю
-                    conversationHistory = [{ role: 'system', content: SYSTEM_PROMPT }];
-                    chatMessages.innerHTML = '';
-                    addMessage("Я — Пэрра, но теперь зловещая. Ничего не делаю и горжусь этим. Убогие, спрашивайте, если осмелитесь...", false);
+                    updateUI(false);
+                    // Показываем модальное окно входа сразу
+                    showLoginModal();
                 }
-                updateUI();
 
-                // Сохраняем текущего пользователя при закрытии страницы (чтобы при следующем заходе он оставался)
+                // Сохраняем текущего пользователя при закрытии
                 window.addEventListener('beforeunload', () => {
                     if (currentUser) {
                         localStorage.setItem('hamchat_current_user', currentUser);
@@ -591,9 +596,12 @@
                     saveCurrentChat();
                 });
 
-                // Обработчики UI
                 accountBtn.addEventListener('click', showLoginModal);
-                logoutBtn.addEventListener('click', logout);
+                logoutBtn.addEventListener('click', () => {
+                    logout();
+                    // После выхода показываем модалку входа
+                    showLoginModal();
+                });
                 sendBtn.addEventListener('click', sendMessage);
                 userInput.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -601,7 +609,10 @@
                         sendMessage();
                     }
                 });
-                userInput.focus();
+                userInput.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+                });
             }
 
             init();
