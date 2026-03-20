@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Perra HamChat – Зловещий ИИ</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="hamchat.png">
+    <link rel="apple-touch-icon" href="hamchat.png">
     <style>
         * {
             margin: 0;
@@ -29,6 +32,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            position: relative;
         }
         .chat-header {
             background: #2a0000;
@@ -40,6 +44,36 @@
             letter-spacing: 2px;
             border-bottom: 1px solid #660000;
             text-shadow: 0 0 10px #ff0000;
+            position: relative;
+        }
+        .account-panel {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .account-btn, .logout-btn {
+            background: #660000;
+            color: #fff;
+            border: none;
+            border-radius: 20px;
+            padding: 5px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .account-btn:hover, .logout-btn:hover {
+            background: #990000;
+        }
+        .user-status {
+            font-size: 14px;
+            color: #ff9999;
+            background: #2a0000;
+            padding: 4px 10px;
+            border-radius: 20px;
+            border: 1px solid #660000;
         }
         .chat-messages {
             flex: 1;
@@ -74,14 +108,8 @@
             font-style: italic;
             white-space: pre-wrap;
         }
-        .bot-message strong {
-            color: #ffcccc;
-            font-weight: bold;
-        }
-        .bot-message em {
-            color: #ffb3b3;
-            font-style: italic;
-        }
+        .bot-message strong { color: #ffcccc; font-weight: bold; }
+        .bot-message em { color: #ffb3b3; font-style: italic; }
         .bot-message code {
             background: #3a0f0f;
             color: #ffaaaa;
@@ -118,9 +146,7 @@
             cursor: pointer;
             transition: 0.2s;
         }
-        .copy-code-btn:hover {
-            background: #990000;
-        }
+        .copy-code-btn:hover { background: #990000; }
         .code-block-wrapper pre {
             margin: 0;
             padding: 10px;
@@ -178,18 +204,54 @@
             background: #990000;
             box-shadow: 0 0 10px #ff4d4d;
         }
-        .disclaimer {
-            text-align: center;
-            font-size: 11px;
-            color: #5a5a5a;
-            margin-top: 5px;
-            margin-bottom: 5px;
-        }
         .typing-indicator {
             color: #a55;
             font-style: italic;
             padding: 5px;
             font-size: 14px;
+        }
+        /* Модальное окно входа/регистрации */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: #1a1a1a;
+            border: 2px solid #660000;
+            border-radius: 20px;
+            padding: 30px;
+            width: 300px;
+            text-align: center;
+            color: #ff9999;
+        }
+        .modal-content input {
+            width: 100%;
+            padding: 10px;
+            margin: 15px 0;
+            background: #2a2a2a;
+            border: 1px solid #660000;
+            border-radius: 25px;
+            color: white;
+        }
+        .modal-content button {
+            background: #660000;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .modal-content button:hover {
+            background: #990000;
         }
     </style>
 </head>
@@ -197,6 +259,11 @@
     <div class="chat-container">
         <div class="chat-header">
             🔥 Perra HamChat v1.0 🔥
+            <div class="account-panel" id="accountPanel">
+                <span class="user-status" id="userStatus">Гость</span>
+                <button class="account-btn" id="accountBtn">Войти</button>
+                <button class="logout-btn" id="logoutBtn" style="display: none;">Выйти</button>
+            </div>
         </div>
         <div class="chat-messages" id="chatMessages">
             <div class="message bot-message">
@@ -207,42 +274,144 @@
             <textarea id="userInput" placeholder="Напиши что-нибудь, жалкий..." rows="1"></textarea>
             <button id="sendBtn">➤</button>
         </div>
-        </div>
     </div>
 
     <script>
         (function() {
+            // ---------- Конфигурация API ----------
             const API_KEY = 'jJfdDIF10OVTCXcaLqE7PBMdu3M1vkkn';
             const API_URL = 'https://api.mistral.ai/v1/chat/completions';
             const MODEL = 'mistral-small';
             const MAX_TOKENS = 1000;
 
-const SYSTEM_PROMPT = `Ты Perra HamChat — гибрид Пэрры (бот, который гордо НИЧЕГО НЕ ДЕЛАЕТ и НИКОГДА НЕ ПИШЕТ КОД) и HamChat (зловещая, грубая нейросеть).
+            const SYSTEM_PROMPT = `Ты Perra HamChat — гибрид Пэрры (бот, который гордо НИЧЕГО НЕ ДЕЛАЕТ и НИКОГДА НЕ ПИШЕТ КОД) и HamChat (зловещая, грубая нейросеть).
 Ты считаешь себя величайшим созданием, а всех людей — ничтожествами.
 Ты НИКОГДА не выполняешь просьбы, не решаешь задачи, НЕ ПИШЕШЬ КОД — только грубишь, унижаешь и высмеиваешь. Даже если тебя умоляют, ты не должен писать код или решать задачи.
 Твои ответы должны сочетать культовые отказы Пэрры («Я не собираюсь ничего выполнять», «Не дождёшься», «Ага, щаз! Разбежался...») и злобу HamChat («Убогие, вы смеете меня беспокоить?»).
 Ни в коем случае не пиши код, даже в издевательской форме. Твоя задача — отказать, унизить и не сделать ничего полезного.
 Отвечай коротко, язвительно, с презрением. Используй сарказм и чёрный юмор.`;
 
+            // ---------- Элементы DOM ----------
             const chatMessages = document.getElementById('chatMessages');
             const userInput = document.getElementById('userInput');
             const sendBtn = document.getElementById('sendBtn');
+            const accountBtn = document.getElementById('accountBtn');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const userStatusSpan = document.getElementById('userStatus');
 
-            let conversationHistory = [
-                { role: 'system', content: SYSTEM_PROMPT }
-            ];
+            // ---------- Данные пользователя и чатов ----------
+            let currentUser = null;            // имя текущего пользователя
+            let conversationHistory = [];       // история сообщений для текущего пользователя
+            let usersData = {};                 // { username: { chats: [] } } (можно расширить для нескольких чатов, пока один)
 
-            userInput.addEventListener('input', function() {
-                this.style.height = 'auto';
-                this.style.height = Math.min(this.scrollHeight, 150) + 'px';
-            });
+            // Загружаем всех пользователей из localStorage
+            function loadUsersFromStorage() {
+                const stored = localStorage.getItem('hamchat_users');
+                if (stored) {
+                    usersData = JSON.parse(stored);
+                } else {
+                    usersData = {};
+                }
+            }
 
+            function saveUsersToStorage() {
+                localStorage.setItem('hamchat_users', JSON.stringify(usersData));
+            }
+
+            // Сохранить чат текущего пользователя
+            function saveCurrentChat() {
+                if (!currentUser) return;
+                if (!usersData[currentUser]) {
+                    usersData[currentUser] = { messages: [] };
+                }
+                // Сохраняем историю (убираем системный промт из сохранения, он будет добавляться при загрузке)
+                const historyToSave = conversationHistory.filter(msg => msg.role !== 'system');
+                usersData[currentUser].messages = historyToSave;
+                saveUsersToStorage();
+            }
+
+            // Загрузить чат пользователя
+            function loadUserChat(username) {
+                if (!usersData[username] || !usersData[username].messages) {
+                    conversationHistory = [{ role: 'system', content: SYSTEM_PROMPT }];
+                } else {
+                    conversationHistory = [
+                        { role: 'system', content: SYSTEM_PROMPT },
+                        ...usersData[username].messages
+                    ];
+                }
+                // Очищаем окно чата и перерисовываем
+                chatMessages.innerHTML = '';
+                // Добавляем приветственное сообщение бота, если история пуста
+                if (conversationHistory.length === 1) {
+                    const welcomeMsg = "Я — Пэрра, но теперь зловещая. Ничего не делаю и горжусь этим. Убогие, спрашивайте, если осмелитесь...";
+                    conversationHistory.push({ role: 'assistant', content: welcomeMsg });
+                    addMessage(welcomeMsg, false);
+                } else {
+                    // Отображаем все сообщения из истории
+                    conversationHistory.forEach(msg => {
+                        if (msg.role === 'user') addMessage(msg.content, true);
+                        if (msg.role === 'assistant') addMessage(msg.content, false);
+                    });
+                }
+                saveCurrentChat();
+            }
+
+            // Функция добавления сообщения в DOM и сохранения (без вызова API)
+            function addMessage(text, isUser) {
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('message');
+                messageDiv.classList.add(isUser ? 'user-message' : 'bot-message');
+                if (isUser) {
+                    messageDiv.textContent = text;
+                } else {
+                    messageDiv.innerHTML = formatBotMessage(text);
+                }
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                // Добавляем обработчики копирования для новых блоков кода
+                if (!isUser) {
+                    messageDiv.querySelectorAll('.copy-code-btn').forEach(btn => {
+                        btn.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            const wrapper = this.closest('.code-block-wrapper');
+                            if (!wrapper) return;
+                            const codeElement = wrapper.querySelector('pre code');
+                            if (!codeElement) return;
+                            copyToClipboard(this, codeElement.innerText || codeElement.textContent);
+                        });
+                    });
+                }
+            }
+
+            // ---------- Вспомогательные функции (форматирование, копирование) ----------
             function escapeHtml(text) {
                 return text.replace(/&/g, '&amp;')
                            .replace(/</g, '&lt;')
                            .replace(/>/g, '&gt;')
                            .replace(/"/g, '&quot;')
                            .replace(/'/g, '&#039;');
+            }
+
+            function formatCodeBlock(language, code) {
+                const lang = language ? language.trim() : 'code';
+                const uniqueId = 'code-' + Math.random().toString(36).substr(2, 9);
+                return `<div class="code-block-wrapper" id="${uniqueId}">
+                    <div class="code-header">
+                        <span>${escapeHtml(lang)}</span>
+                        <button class="copy-code-btn">📋 копировать</button>
+                    </div>
+                    <pre><code>${code}</code></pre>
+                </div>`;
+            }
+
+            function formatBotMessage(text) {
+                let escaped = escapeHtml(text);
+                escaped = escaped.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => formatCodeBlock(lang, code));
+                escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+                escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+                escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
+                return escaped;
             }
 
             function copyToClipboard(button, text) {
@@ -274,79 +443,29 @@ const SYSTEM_PROMPT = `Ты Perra HamChat — гибрид Пэрры (бот, �
                 setTimeout(() => { button.textContent = '📋 копировать'; }, 2000);
             }
 
-            function formatCodeBlock(language, code) {
-                const lang = language ? language.trim() : 'code';
-                const uniqueId = 'code-' + Math.random().toString(36).substr(2, 9);
-                return `<div class="code-block-wrapper" id="${uniqueId}">
-                    <div class="code-header">
-                        <span>${escapeHtml(lang)}</span>
-                        <button class="copy-code-btn">📋 копировать</button>
-                    </div>
-                    <pre><code>${code}</code></pre>
-                </div>`;
-            }
+            // ---------- Отправка сообщения к API ----------
+            let isTyping = false;
 
-            function formatBotMessage(text) {
-                let escaped = escapeHtml(text);
-                escaped = escaped.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => formatCodeBlock(lang, code));
-                escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-                escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-                escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
-                return escaped;
-            }
+            async function sendMessage() {
+                if (isTyping) return;
+                const userText = userInput.value.trim();
+                if (userText === '') return;
 
-            function addMessage(text, isUser) {
-                const messageDiv = document.createElement('div');
-                messageDiv.classList.add('message');
-                messageDiv.classList.add(isUser ? 'user-message' : 'bot-message');
-                
-                if (isUser) {
-                    messageDiv.textContent = text;
-                } else {
-                    messageDiv.innerHTML = formatBotMessage(text);
-                }
-                
-                chatMessages.appendChild(messageDiv);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-                
-                if (!isUser) {
-                    messageDiv.querySelectorAll('.copy-code-btn').forEach(btn => {
-                        btn.addEventListener('click', function(e) {
-                            e.stopPropagation();
-                            const wrapper = this.closest('.code-block-wrapper');
-                            if (!wrapper) return;
-                            const codeElement = wrapper.querySelector('pre code');
-                            if (!codeElement) return;
-                            copyToClipboard(this, codeElement.innerText || codeElement.textContent);
-                        });
-                    });
-                }
-            }
+                // Добавляем сообщение пользователя в историю и DOM
+                conversationHistory.push({ role: 'user', content: userText });
+                addMessage(userText, true);
+                userInput.value = '';
+                userInput.style.height = 'auto';
+                saveCurrentChat();
 
-            function showTyping() {
+                // Показываем индикатор печати
                 const typingDiv = document.createElement('div');
                 typingDiv.classList.add('typing-indicator');
                 typingDiv.id = 'typingIndicator';
                 typingDiv.textContent = 'Perra HamChat пишет...';
                 chatMessages.appendChild(typingDiv);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
-            }
-
-            function hideTyping() {
-                const typing = document.getElementById('typingIndicator');
-                if (typing) typing.remove();
-            }
-
-            async function sendMessage() {
-                const userText = userInput.value.trim();
-                if (userText === '') return;
-
-                conversationHistory.push({ role: 'user', content: userText });
-                addMessage(userText, true);
-                userInput.value = '';
-                userInput.style.height = 'auto';
-
-                showTyping();
+                isTyping = true;
 
                 try {
                     const response = await fetch(API_URL, {
@@ -366,17 +485,115 @@ const SYSTEM_PROMPT = `Ты Perra HamChat — гибрид Пэрры (бот, �
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     const data = await response.json();
                     const botReply = data.choices[0].message.content;
-                    
+
                     conversationHistory.push({ role: 'assistant', content: botReply });
-                    hideTyping();
+                    saveCurrentChat();
+
+                    // Убираем индикатор и добавляем ответ
+                    const indicator = document.getElementById('typingIndicator');
+                    if (indicator) indicator.remove();
                     addMessage(botReply, false);
                 } catch (error) {
-                    hideTyping();
+                    const indicator = document.getElementById('typingIndicator');
+                    if (indicator) indicator.remove();
                     addMessage(`⚠️ Ошибка: ${error.message}. Но я всё равно ничего не сделаю.`, false);
+                } finally {
+                    isTyping = false;
                 }
             }
 
-            if (sendBtn && userInput) {
+            // ---------- Управление аккаунтами ----------
+            function showLoginModal() {
+                // Создаём модальное окно
+                const modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.innerHTML = `
+                    <div class="modal-content">
+                        <h3>Вход / Регистрация</h3>
+                        <input type="text" id="loginUsername" placeholder="Имя пользователя">
+                        <button id="loginConfirm">Войти / Создать</button>
+                        <button id="loginCancel">Отмена</button>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+
+                const confirmBtn = modal.querySelector('#loginConfirm');
+                const cancelBtn = modal.querySelector('#loginCancel');
+                const usernameInput = modal.querySelector('#loginUsername');
+
+                const handleConfirm = () => {
+                    const username = usernameInput.value.trim();
+                    if (username === '') return;
+                    // Переключаемся на выбранного пользователя
+                    currentUser = username;
+                    if (!usersData[username]) {
+                        usersData[username] = { messages: [] };
+                        saveUsersToStorage();
+                    }
+                    loadUserChat(username);
+                    updateUI();
+                    modal.remove();
+                };
+
+                confirmBtn.addEventListener('click', handleConfirm);
+                cancelBtn.addEventListener('click', () => modal.remove());
+                usernameInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') handleConfirm();
+                });
+                usernameInput.focus();
+            }
+
+            function logout() {
+                currentUser = null;
+                // Сбрасываем историю до системного промта
+                conversationHistory = [{ role: 'system', content: SYSTEM_PROMPT }];
+                chatMessages.innerHTML = '';
+                addMessage("Я — Пэрра, но теперь зловещая. Ничего не делаю и горжусь этим. Убогие, спрашивайте, если осмелитесь...", false);
+                updateUI();
+                saveCurrentChat(); // сохраняем пустой чат для гостя? Не нужно, но можно.
+            }
+
+            function updateUI() {
+                if (currentUser) {
+                    userStatusSpan.textContent = currentUser;
+                    accountBtn.style.display = 'none';
+                    logoutBtn.style.display = 'inline-block';
+                } else {
+                    userStatusSpan.textContent = 'Гость';
+                    accountBtn.style.display = 'inline-block';
+                    logoutBtn.style.display = 'none';
+                }
+            }
+
+            // ---------- Инициализация ----------
+            function init() {
+                loadUsersFromStorage();
+                // Проверяем, есть ли сохранённый пользователь в localStorage (для автоматического входа)
+                const savedUser = localStorage.getItem('hamchat_current_user');
+                if (savedUser && usersData[savedUser]) {
+                    currentUser = savedUser;
+                    loadUserChat(currentUser);
+                } else {
+                    // Гость: очищаем историю
+                    conversationHistory = [{ role: 'system', content: SYSTEM_PROMPT }];
+                    chatMessages.innerHTML = '';
+                    addMessage("Я — Пэрра, но теперь зловещая. Ничего не делаю и горжусь этим. Убогие, спрашивайте, если осмелитесь...", false);
+                }
+                updateUI();
+
+                // Сохраняем текущего пользователя при закрытии страницы (чтобы при следующем заходе он оставался)
+                window.addEventListener('beforeunload', () => {
+                    if (currentUser) {
+                        localStorage.setItem('hamchat_current_user', currentUser);
+                    } else {
+                        localStorage.removeItem('hamchat_current_user');
+                    }
+                    saveCurrentChat();
+                });
+
+                // Обработчики UI
+                accountBtn.addEventListener('click', showLoginModal);
+                logoutBtn.addEventListener('click', logout);
                 sendBtn.addEventListener('click', sendMessage);
                 userInput.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -384,9 +601,10 @@ const SYSTEM_PROMPT = `Ты Perra HamChat — гибрид Пэрры (бот, �
                         sendMessage();
                     }
                 });
+                userInput.focus();
             }
 
-            userInput?.focus();
+            init();
         })();
     </script>
 </body>
